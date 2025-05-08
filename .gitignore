@@ -1,0 +1,7 @@
+Model*/
+grav.in
+*.o
+
+
+# macOS system files
+.DS_Store
