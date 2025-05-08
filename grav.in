@@ -1,0 +1,36 @@
+Model001/                
+0                                            ! iseed [0 = fiducial]
+0.3                                          ! Omega_m 
+0.7                                          ! xhubble
+97.0                                         ! Delta_vir
+3.0E+09                                      ! Mvir [Msun/h]
+20.0                                         ! cvir
+0.0                                          ! zvir (redshift)
+0.0                                          ! f_b (baryonic mass fraction)
+6                                            ! imode [1=NFW, 2=PLtrunc, 3=Etrunc, 4=exp-trunc, 6=abg] 
+0.0                                          ! r_trunc                    (imode=2&4)  
+0.0                                          ! p [truncation power law]   (imode=2) 
+0.164                                        ! Zt            [fid=0.164]  (imode=3)
+1.0D-5                                       ! deltaP        [fid=1.0D-5] (imode=3)
+0.3                                          ! rdecay/rtrunc [fid=0.3]    (imode=4)
+1.0                                          ! alpha         [fid=1.0]    (imode=6)
+5.0                                          ! beta          [fid=4.0]    (imode=6)
+0.5                                          ! gamma         [fid=1.0]    (imode=6)
+.TRUE.                                       ! flyby_on flag (flyby_on=TRUE)
+2                                            ! tfly (flyby_on=TRUE)
+10                                           ! bfly (flyby_on=TRUE)
+1                                            ! Mfly (flyby_on=TRUE)
+3                                            ! vfly (flyby_on=TRUE)
+0.01                                         ! rmin (in units of r_s)
+100.0                                        ! rmax (in units of r_s)
+150                                          ! Ngrid
+10.0                                         ! sigma_m [cm^2/g]
+2.256758                                     ! a
+1.38                                         ! b
+0.75                                         ! C
+0.0                                          ! Gamma_evap
+1.0E-3                                       ! eps_dt
+1.0E-12                                      ! eps_dr
+1.0E-4                                       ! eps_du
+2.0                                          ! tstop
+2                                            ! Revir-method [1=OLD, 2=NEW, 3=ZYY]

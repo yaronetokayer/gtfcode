@@ -1,0 +1,20 @@
+# Compile UNIX (SUN) version of software for GravoThermal
+
+COMPILER = gfortran
+
+FC = gfortran
+
+#FFLAGS = -u -O2 -m32
+FFLAGS = -u -O2
+
+OBJECTS  = GravoThermal.o aux.o quadpack8.o
+
+GravoThermal: ${OBJECTS}
+	 ${COMPILER} -o GravoThermal ${OBJECTS} -lm
+
+GravoThermal.o: GravoThermal.f
+	   ${COMPILER} ${FFLAGS} -c GravoThermal.f
+
+${OBJECTS}: paramfile.h
+
+ 

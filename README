@@ -1,0 +1,8 @@
+To Compile:
+
+make -f GravoThermal.mke
+
+
+To Run:
+
+GravoThermal.e < grav.in
