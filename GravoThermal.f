@@ -724,6 +724,7 @@ c-----------------------------------------------------------------------
 
       INTEGER  i
       REAL*8   Mcum,Mcell
+      REAL*8   Mnew(0:Ngrid)
       
 c---
 
@@ -732,12 +733,18 @@ c   update mass grid. Also adjust densities, such that these are
 c   in agreement. 
 
       Mcum = 0.0d0
+      Mnew(0) = 0.0D0
+
       DO i=1,Ngrid
         Mcell = M(i) - M(i-1)
         Mcell = Mcell - Gamma_evap * Mcell * dt
         rho(i)= rho(i)- Gamma_evap * rho(i)* dt
         Mcum  = Mcum + Mcell
-        M(i)  = Mcum
+        Mnew(i)  = Mcum
+      END DO
+
+      DO i=1,Ngrid
+         M(i) = Mnew(i)
       END DO
       
       Mtotal = Mcum
