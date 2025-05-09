@@ -573,7 +573,7 @@ c   timestep. Iterate if needed
 
 c---evaporate mass due to collisions with host particles
  
-      IF (Gamma_evap.GT.0.0d0) CALL evaporate
+      IF (Gamma_evap.NE.0.0d0) CALL evaporate
 
 C---Heating due to impulsive encounter
       IF ( apply_impulse_iter ) THEN
