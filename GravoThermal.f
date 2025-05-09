@@ -15,7 +15,6 @@ c**********************************************************************
       REAL*8    tcc,t0cmax,rho0min
       REAL      ai1,aver_iter1,aver_iter2,aver_iter3
       CHARACTER outfil1*60,outfil2*60,outfil3*60
-      LOGICAL   apply_impulse_iter, applied_impulse
       
       INTEGER   lblnk
       EXTERNAL  lblnk
@@ -146,10 +145,10 @@ c---increment counters
 
 c---check if we are at the flyby time
 
-        IF ( apply_impulse_iter ) THEN
-          CALL apply_impulse
-          applied_impulse = .TRUE.
-        END IF
+        ! IF ( apply_impulse_iter ) THEN
+        !   CALL apply_impulse
+        !   applied_impulse = .TRUE.
+        ! END IF
 
         CALL integrate_time_step(k,iN1,iN2,iN3)
 
@@ -502,20 +501,16 @@ c-----------------------------------------------------------------------
       INCLUDE 'paramfile.h'
 
       INTEGER i
-      REAL*8  rmed_i,vkick2 ! , max_vkick2
-      
-      ! max_vkick2 = 0.0d0
+      REAL*8  rmed_i,vkick2
 
-      DO i = 2, Ngrid
+      DO i = 1, Ngrid
          rmed_i = 0.5d0 * (r(i) + r(i-1))
          vkick2 = (8.d0 * Mfly**2 * rmed_i**2) / 
      &            (3.d0 * vfly**2 * bfly**4)
          v2(i) = v2(i) + vkick2
-
-         ! IF (vkick2 . GT. max_vkick2) max_vkick2 = vkick2
+         u(i) = 1.5d0 * v2(i)
+         P(i) = rho(i) * v2(i)
       END DO
-
-      ! WRITE(*,*) 'Max vkick^2 applied =', max_vkick2
 
       RETURN
       END
@@ -579,6 +574,12 @@ c   timestep. Iterate if needed
 c---evaporate mass due to collisions with host particles
  
       IF (Gamma_evap.GT.0.0d0) CALL evaporate
+
+C---Heating due to impulsive encounter
+      IF ( apply_impulse_iter ) THEN
+        CALL apply_impulse
+        applied_impulse = .TRUE.
+      END IF
 
 c---revirialize
 
@@ -1777,7 +1778,7 @@ c***********************************************************************
 
       SUBROUTINE set_param
 c-----------------------------------------------------------------------
-c  Set parameters
+c  Set parameters and convert units as needed
 c-----------------------------------------------------------------------
 
       INCLUDE 'paramfile.h'
@@ -1815,6 +1816,15 @@ c---convert cross section per unit mass to dimensionless form
 
       sigma_m = sigma_m / sigma0
 
+c---convert Mfly to characteristic mass units if flyby is on
+      IF (flyby_on) THEN
+         IF (imode .EQ. 6) THEN
+            Mfly = Mfly * chi
+         ELSE
+            Mfly = Mfly * fc
+         END IF
+      END IF
+
 c---write initial density profiles to file
 
       outfile='/initprof.dat'
@@ -1844,11 +1854,11 @@ c-----------------------------------------------------------------------
 
       INCLUDE 'paramfile.h'
 
-      INTEGER  ianswer
-      REAL*8   rmin,rmax,gc
+      INTEGER  ianswer, ierr
+      REAL*8   rmin,rmax,gc, SS, SSerr
        
-      REAL*8   fNFW,xH,gp,Menc,df,Delta_crit
-      EXTERNAL fNFW,xH,gp,Menc,df,Delta_crit
+      REAL*8   fNFW,xH,gp,Menc,df,Delta_crit, chiint
+      EXTERNAL fNFW,xH,gp,Menc,df,Delta_crit, chiint
       
 c---
 
@@ -1993,10 +2003,19 @@ c---Parameters used to abg profile (imode=6)
       WRITE(*,*)' '
       IF (imode.NE.6) gamma=0.0d0
 
+c---compute chi parameter for abg profile
+      If (imode.EQ.6) THEN
+        CALL dqags(chiint, 0.0d0, 1.0d3, 1.0D-6, 1.0D-6, SS, SSerr,
+     &             Neval2,ierr,Nlimit,Nlenw,last2,iwork2,work2)
+
+        chi = SS
+      ELSE
+        chi = 0.0d0
+      END IF
+
 c---compute virial radius and scale radius in Mpc, Vvir in km/s
       
       Rvir = 0.169d0 * (Mvir/1.0D+12)**(1.d0/3.d0)
-ccc      Rvir = Rvir * (Delta_crit(zvir)/178.d0)**(-1.d0/3.d0)
       Rvir = Rvir * (Delta_vir/178.d0)**(-1.d0/3.d0)
       Rvir = Rvir * (xH(zvir)/xH_0)**(-2.0/3.0)
 
@@ -2004,11 +2023,16 @@ ccc      Rvir = Rvir * (Delta_crit(zvir)/178.d0)**(-1.d0/3.d0)
       Mvir = Mvir / xhubble
 
       rs = rvir/cvir
-      Vvir = DSQRT(gee * Mvir/rvir)       
+      Vvir = DSQRT(gee * Mvir/rvir) 
       fc = fNFW(cvir)
       gc = gp(cvir) 
 
-      Ms = Mvir/fc
+      If (imode.EQ.6) THEN
+        Ms = Mvir / chi
+      ELSE 
+        Ms = Mvir / fc
+      END IF
+
       zeta_b = (f_b/(1.0d0-f_b)) * fc/(cvir**(0.6d0))
 
 c---mode-specific parameter definitions
@@ -2050,7 +2074,7 @@ c---flyby parameters for impulsive heating
       WRITE(*,*)' '
       IF (.NOT. flyby_on) bfly=0.0d0
 
-      WRITE(*,*)' Mfly (in units of ???) '
+      WRITE(*,*)' Mfly (as fraction of Mtot or Mvir) '
       READ(*,*)Mfly
       WRITE(*,*)'  Mfly = ',Mfly
       WRITE(*,*)' '
@@ -2629,6 +2653,24 @@ c---
 
       END
       
+c***********************************************************************
+
+      REAL*8 FUNCTION chiint(x)
+c-----------------------------------------------------------------------      
+c  Integrand for the chi parameter in the abg profile
+c-----------------------------------------------------------------------      
+
+      INCLUDE 'paramfile.h'
+
+      REAL*8  x, expo
+ 
+c---
+
+      expo = (beta - gamma) / alpha
+      chiint = x**(2.d0 - gamma) / (1.d0 + x**alpha)**expo 
+
+      END
+
 c***********************************************************************
 
       REAL*8 FUNCTION findr(rr)

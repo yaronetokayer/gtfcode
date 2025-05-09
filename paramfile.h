@@ -114,16 +114,18 @@ c---parameters related to impulsive flyby
       REAL*8 Mfly         ! perturber mass as fraction of ???
       REAL*8 vfly         ! perturber velocity in units of v0
       LOGICAL flyby_on    ! whether to apply the flyby impulse
+      LOGICAL apply_impulse_iter, applied_impulse ! for the loop
 
-      COMMON /flybyparam/ tfly, bfly, Mfly, vfly, flyby_on
+      COMMON /flybyparam/ tfly, bfly, Mfly, vfly, flyby_on,
+     &                    apply_impulse_iter, applied_impulse
 
 c---properties related to initial profile
 
       INTEGER  imode
       COMMON /mode/ imode
 
-      REAL*8   alpha, beta, gamma
-      COMMON /abgpars/ alpha, beta, gamma
+      REAL*8   alpha, beta, gamma, chi
+      COMMON /abgpars/ alpha, beta, gamma, chi
       
       REAL*8   rtrunc,ppar,Mrt,prefac,pow,power,rtr,ftr
       REAL*8   Ft,Zt,rcut,eta,eps
