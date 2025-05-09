@@ -1,6 +1,7 @@
 Model*/
 grav.in
 *.o
+GravoThermal
 
 
 # macOS system files
