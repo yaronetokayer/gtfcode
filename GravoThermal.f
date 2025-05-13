@@ -13,6 +13,7 @@ c**********************************************************************
       INTEGER   k,j,n,iN1,iN2,iN3,Niter1,Niter2,Niter3
       REAL*8    drho1,drho2,rho_old1,rho_old2,rho_orig,rmed,sigma_orig
       REAL*8    tcc,t0cmax,rho0min
+      REAL*8    last_impulse_time
       REAL      ai1,aver_iter1,aver_iter2,aver_iter3
       CHARACTER outfil1*60,outfil2*60,outfil3*60
       
@@ -117,7 +118,7 @@ c   parameters that are used to gauge evolution in central density
       rho_orig = rho(1)
       rho0min = rho(1)
       apply_impulse_iter = .FALSE.
-      applied_impulse = .FALSE.
+      last_impulse_time = 0.0d0
 
 c---integrate time steps until stopping criterion is reached
       
@@ -130,11 +131,15 @@ c---integrate time steps until stopping criterion is reached
         IF (k.EQ.0) dt=1.0E-7
 
 c---ensure that an integration is performed at tfly
+C---Doing a flyby at every multiple of 0.5
 
-        IF (flyby_on .AND. .NOT. applied_impulse .AND.
+        tfly = 0.5D0 * (INT(t / 0.5D0) + 1) ! mult of 0.5 > t
+
+        IF (flyby_on .AND. last_impulse_time .NE. tfly .AND.
      &      t .LT. tfly .AND. t + dt .GE. tfly) THEN
           dt = tfly - t
           apply_impulse_iter = .TRUE.
+          last_impulse_time = tfly
         END IF
 
 c---increment counters
@@ -142,13 +147,6 @@ c---increment counters
         k = k + 1
         n = n + 1
         t = t + dt
-
-c---check if we are at the flyby time
-
-        ! IF ( apply_impulse_iter ) THEN
-        !   CALL apply_impulse
-        !   applied_impulse = .TRUE.
-        ! END IF
 
         CALL integrate_time_step(k,iN1,iN2,iN3)
 
@@ -578,7 +576,6 @@ c---evaporate mass due to collisions with host particles
 C---Heating due to impulsive encounter
       IF ( apply_impulse_iter ) THEN
         CALL apply_impulse
-        applied_impulse = .TRUE.
       END IF
 
 c---revirialize
