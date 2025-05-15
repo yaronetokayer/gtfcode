@@ -1534,9 +1534,9 @@ C-----------------------------------------------------------------------
       EXTERNAL ran3
       
       REAL*8   rhotilde2,rhotilde4,fevsq,potential,getQ,brent
-      REAL*8   toint1,toint3,toint6,toint7,toint1b, toint1d
+      REAL*8   toint1,toint3,toint6,toint7,toint1b,toint1d
       EXTERNAL rhotilde2,rhotilde4,fevsq,potential,getQ,brent
-      EXTERNAL toint1,toint3,toint6,toint7,toint1b, toint1d
+      EXTERNAL toint1,toint3,toint6,toint7,toint1b,toint1d
       
 C--- Store input radius
 
@@ -1594,13 +1594,15 @@ C      Use exponential cutoff profile to compute dispersion
       END IF
 
 C--- imode = 6: Alpha-Beta-Gamma profile
-C      Use custom integrand to compute vdisp for ABG model
+
       IF (imode .EQ. 6) THEN
+        density = rbuf**(-gamma) / 
+     &            ((1.0d0 + rbuf**alpha)**((beta - gamma) / alpha))
+      
         CALL dqagi(toint1d, rbuf, 1, 1.0D-6, 1.0D-4, SS, SSerr, Neval,
      &            ierr, Nlimit, Nlenw, last, iwork, work)
-        density = 1.0D0 / (rr**gamma * (1.0D0 + rr**(1.0D0 / alpha))
-     &            **((beta - gamma) * alpha))
-        sigr_NFW = (1.0D0 / density) * SS
+
+        sigr_NFW = SS / density
       END IF
        
       END
@@ -2012,7 +2014,7 @@ c---Parameters used to abg profile (imode=6)
 
 c---compute chi parameter for abg profile
       If (imode.EQ.6) THEN
-        CALL dqags(chiint, 0.0d0, 1.0d3, 1.0D-6, 1.0D-6, SS, SSerr,
+        CALL dqags(chiint, 0.0d0, 1.0d4, 1.0D-6, 1.0D-6, SS, SSerr,
      &             Neval2,ierr,Nlimit,Nlenw,last2,iwork2,work2)
 
         chi = SS
@@ -2030,14 +2032,14 @@ c---compute virial radius and scale radius in Mpc, Vvir in km/s
       Mvir = Mvir / xhubble
 
       rs = rvir/cvir
-      Vvir = DSQRT(gee * Mvir/rvir) 
       fc = fNFW(cvir)
+      Ms = Mvir / fc
+      Vvir = DSQRT(gee * Mvir/rvir) 
       gc = gp(cvir) 
 
       If (imode.EQ.6) THEN
-        Ms = Mvir / chi
-      ELSE 
-        Ms = Mvir / fc
+        Ms = Ms * (fc / chi)
+        rs = rs * (fc / chi)**(1.0/3.0)
       END IF
 
       zeta_b = (f_b/(1.0d0-f_b)) * fc/(cvir**(0.6d0))
@@ -2448,24 +2450,27 @@ c**********************************************************************
       REAL*8 FUNCTION toint1d(x)
 C-----------------------------------------------------------------------
 C  Integrand for radial velocity dispersion calculation using the
-C  alpha-beta-gamma density profile:
-C    rho(r) = C / [r^gamma * (1 + r^(1/alpha))^((beta - gamma) * alpha)]
-C  This function returns rho(r) * M(r) / r^2, the integrand of the
+C  alpha-beta-gamma density profile: rho(x) * chi(x) / x^2
 C  Jeans equation under spherical, isotropic assumptions.
 C-----------------------------------------------------------------------
 
       INCLUDE 'paramfile.h'
 
-      REAL*8   x, C, density, integrand
+      INTEGER ierr
+      REAL*8   x, density, SS, SSerr
       
-      REAL*8   Menc
-      EXTERNAL Menc
+      REAL*8   chiint
+      EXTERNAL chiint
 
-      C = 1.0D0  ! Placeholder normalization constant
-      density = C / (x**gamma * (1.0D0 + x**(1.0D0 / alpha))
-     &      **((beta - gamma) * alpha))
-      integrand = density * Menc(x) / x**2
-      toint1d = integrand
+c--- Compute chi(x)
+      CALL dqags(chiint, 0.0d0, x, 1.0d-6, 1.0d-6, SS, SSerr, Neval3,
+     &           ierr, Nlimit, Nlenw, last3, iwork3, work3)
+
+c--- rho(x) = x^{-gamma} * (1 + x^alpha)^{-((beta - gamma)/alpha)}
+      density = x**(-gamma) /
+     &          ((1.0d0 + x**alpha)**((beta - gamma) / alpha))
+
+      toint1d = density * SS / (x**2)
 
       RETURN
       END
@@ -2548,11 +2553,9 @@ C-----------------------------------------------------------------------
       REAL*8 rr, density, C
 
 C---
-      C = 1.0D0  ! Placeholder normalization constant
 
-      density = C / (rr**gamma * (1.0D0 + rr**(1.0D0/alpha))**
-     &          ((beta - gamma) * alpha))
-      toint4b = density * rr**2
+      toint4b = rr**(2.0D0 - gamma) / 
+     &          (1.0d0 + rr**alpha)**((beta - gamma) / alpha)
 
       RETURN
       END
@@ -2670,9 +2673,7 @@ c-----------------------------------------------------------------------
       INCLUDE 'paramfile.h'
 
       REAL*8  x, expo
- 
 c---
-
       expo = (beta - gamma) / alpha
       chiint = x**(2.d0 - gamma) / (1.d0 + x**alpha)**expo 
 
@@ -2885,21 +2886,25 @@ c---compute rho_s in Msun/kpc^3
       WRITE(*,*)'              v_0 [km/s] = ',v0
       WRITE(*,*)' log[rho_s/(Msun/kpc^3)] = ',DLOG10(rhochar)
       WRITE(*,*)'              r_s  [kpc] = ',rs*1.0D+3
-      WRITE(*,*)'             r_trunc/r_s = ',rtrunc
+      IF (imode.EQ.2 .OR. imode.EQ.4) THEN
+            WRITE(*,*)'             r_trunc/r_s = ',rtrunc
+      END IF
       WRITE(*,*)'                    cvir = ',cvir
+      WRITE(*,*)'                      fc = ',fc
+      IF (imode.EQ.6) WRITE(*,*)'                     chi = ',chi
       WRITE(*,*)' '
-      WRITE(*,*)'                   alpha = ',alpha
-      WRITE(*,*)'                    beta = ',beta
-      WRITE(*,*)'                   gamma = ',gamma
-      WRITE(*,*)'               power-law = ',ppar
-      WRITE(*,*)'                     Z_t = ',Zt
-      WRITE(*,*)'         r_decay/r_trunc = ',eta
+      IF (imode.EQ.6) WRITE(*,*)'                   alpha = ',alpha
+      IF (imode.EQ.6) WRITE(*,*)'                    beta = ',beta
+      IF (imode.EQ.6) WRITE(*,*)'                   gamma = ',gamma
+      IF (imode.EQ.2) WRITE(*,*)'               power-law = ',ppar
+      IF (imode.EQ.3) WRITE(*,*)'                     Z_t = ',Zt
+      IF (imode.EQ.4) WRITE(*,*)'         r_decay/r_trunc = ',eta
       WRITE(*,*)' '
       WRITE(*,*)'                flyby_on = ',flyby_on
-      WRITE(*,*)'                    tfly = ',tfly
-      WRITE(*,*)'                    bfly = ',bfly
-      WRITE(*,*)'                    Mfly = ',Mfly
-      WRITE(*,*)'                    vfly = ',vfly    
+      IF (flyby_on) WRITE(*,*)'                    tfly = ',tfly
+      IF (flyby_on) WRITE(*,*)'                    bfly = ',bfly
+      IF (flyby_on) WRITE(*,*)'                    Mfly = ',Mfly
+      IF (flyby_on) WRITE(*,*)'                    vfly = ',vfly    
       WRITE(*,*)' '
       WRITE(*,*)'                 xlgrmin = ',xlgrmin
       WRITE(*,*)'                 xlgrmax = ',xlgrmax
@@ -2937,21 +2942,25 @@ c---write same info to logfile
       WRITE(97,*)'              v_0 [km/s] = ',v0
       WRITE(97,*)' log[rho_s/(Msun/kpc^3)] = ',DLOG10(rhochar)
       WRITE(97,*)'              r_s  [kpc] = ',rs*1.0D+3
-      WRITE(97,*)'             r_trunc/r_s = ',rtrunc
+      IF (imode.EQ.2 .OR. imode.EQ.4) THEN
+            WRITE(97,*)'             r_trunc/r_s = ',rtrunc
+      END IF
       WRITE(97,*)'                    cvir = ',cvir
+      WRITE(97,*)'                      fc = ',fc
+      IF (imode.EQ.6) WRITE(97,*)'                     chi = ',chi
       WRITE(97,*)' '
-      WRITE(97,*)'                   alpha = ',alpha
-      WRITE(97,*)'                    beta = ',beta
-      WRITE(97,*)'                   gamma = ',gamma
-      WRITE(97,*)'               power-law = ',ppar
-      WRITE(97,*)'                     Z_t = ',Zt
-      WRITE(97,*)'         r_decay/r_trunc = ',eta
+      IF (imode.EQ.6) WRITE(97,*)'                   alpha = ',alpha
+      IF (imode.EQ.6) WRITE(97,*)'                    beta = ',beta
+      IF (imode.EQ.6) WRITE(97,*)'                   gamma = ',gamma
+      IF (imode.EQ.2) WRITE(97,*)'               power-law = ',ppar
+      IF (imode.EQ.3) WRITE(97,*)'                     Z_t = ',Zt
+      IF (imode.EQ.4) WRITE(97,*)'         r_decay/r_trunc = ',eta
       WRITE(97,*)' '
       WRITE(97,*)'                flyby_on = ',flyby_on
-      WRITE(97,*)'                    tfly = ',tfly
-      WRITE(97,*)'                    bfly = ',bfly
-      WRITE(97,*)'                    Mfly = ',Mfly
-      WRITE(97,*)'                    vfly = ',vfly    
+      IF (flyby_on) WRITE(97,*)'                    tfly = ',tfly
+      IF (flyby_on) WRITE(97,*)'                    bfly = ',bfly
+      IF (flyby_on) WRITE(97,*)'                    Mfly = ',Mfly
+      IF (flyby_on) WRITE(97,*)'                    vfly = ',vfly    
       WRITE(97,*)' '
       WRITE(97,*)'                 xlgrmin = ',xlgrmin
       WRITE(97,*)'                 xlgrmax = ',xlgrmax
