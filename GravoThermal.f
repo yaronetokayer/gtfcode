@@ -521,7 +521,7 @@ c-----------------------------------------------------------------------
 
       INCLUDE 'paramfile.h'
 
-      INTEGER  i,istep,iter1,iter2,iter3
+      INTEGER  i,istep,iter1,iter2,iter3,iter4
       REAL*8   a0(Ngrid),a1(Ngrid),a2(Ngrid),a3(Ngrid)
       REAL*8   a4(Ngrid),a5(Ngrid)
 
@@ -543,9 +543,10 @@ c---compute the luminosities for all grid points
 
 c----conduct heat across neighboring cells. 
 
-      iter1 = 1
-      iter2 = 1
-      iter3 = 1
+      iter1 = 1 ! heat conduction attempts
+      iter2 = 1 ! revirialization convergence attempts
+      iter3 = 1 ! revirialization relaxation attempts
+      if (flyby_triggered) iter4 = 1 ! impulse attempts
  33   CALL conduct_heat
  
 c---if maximum conduction too large, revert back and use smaller
@@ -574,6 +575,7 @@ c---evaporate mass due to collisions with host particles
 
 C---Heating due to impulsive encounter
       IF ( flyby_triggered ) THEN
+        vkick2_s = vkick2_s / iter4
         CALL apply_impulse
       END IF
 
@@ -595,7 +597,7 @@ c---revirialize
           rho(i)=a5(i)
         END DO
         iter2 = iter2 + 1
-        IF (iter2.EQ.10) CALL Terminate('No convergence achieved iter3')
+        IF (iter2.EQ.10) CALL Terminate('No convergence achieved iter2')
         WRITE(*,*)' TimeStep Iteration:',iter2,dt
         GOTO 33
       END IF
