@@ -113,11 +113,12 @@ c---parameters related to impulsive flyby
       REAL*8 bfly         ! impact parameter in units of rs
       REAL*8 Mfly         ! perturber mass as fraction of ???
       REAL*8 vfly         ! perturber velocity in units of v0
+      REAL*8 vkick2_s     ! vkick2 at scale radius
       LOGICAL flyby_on    ! whether to apply the flyby impulse
       LOGICAL apply_impulse_iter ! for the loop
 
       COMMON /flybyparam/ tfly, bfly, Mfly, vfly, flyby_on,
-     &                    apply_impulse_iter
+     &                    apply_impulse_iter,vkick2_s
 
 c---properties related to initial profile
 

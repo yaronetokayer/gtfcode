@@ -117,7 +117,7 @@ c   parameters that are used to gauge evolution in central density
       rho_old2 = rho(1)
       rho_orig = rho(1)
       rho0min = rho(1)
-      apply_impulse_iter = .FALSE.
+      flyby_triggered = .FALSE.
       last_impulse_time = 0.0d0
 
 c---integrate time steps until stopping criterion is reached
@@ -133,12 +133,12 @@ c---integrate time steps until stopping criterion is reached
 c---ensure that an integration is performed at tfly
 C---Doing a flyby at every multiple of 0.5
 
-        tfly = 0.5D0 * (INT(t / 0.5D0) + 1) ! mult of 0.5 > t
+        ! tfly = 0.5D0 * (INT(t / 0.5D0) + 1) ! mult of 0.5 > t
 
         IF (flyby_on .AND. last_impulse_time .NE. tfly .AND.
      &      t .LT. tfly .AND. t + dt .GE. tfly) THEN
           dt = tfly - t
-          apply_impulse_iter = .TRUE.
+          flyby_triggered = .TRUE.
           last_impulse_time = tfly
         END IF
 
@@ -196,7 +196,7 @@ c    density has changed by >0.02)
 c---write profiles to file (everytime when log of central 
 c    density has changed by >0.1)
 
-        IF (drho2.GT.0.1 .OR. apply_impulse_iter) THEN 
+        IF (drho2.GT.0.1 .OR. flyby_triggered) THEN 
           j = j + 1
           rho_old2 = rho(1)
           CALL write_output(j)
@@ -205,7 +205,7 @@ c    density has changed by >0.1)
 
 c---update logfile
 
-        IF (MOD(k,100000).EQ.0 .OR. apply_impulse_iter) THEN 
+        IF (MOD(k,100000).EQ.0 .OR. flyby_triggered) THEN 
           CALL get_time
           aver_iter1 = FLOAT(Niter1)/100000.0
           aver_iter2 = FLOAT(Niter2)/100000.0
@@ -221,7 +221,7 @@ c---update logfile
      &      aver_iter1,aver_iter2,aver_iter3
         END IF
 
-        IF (apply_impulse_iter) apply_impulse_iter = .FALSE.
+        IF (flyby_triggered) flyby_triggered = .FALSE.
 
       END DO
   101 CONTINUE
@@ -503,8 +503,7 @@ c-----------------------------------------------------------------------
 
       DO i = 1, Ngrid
          rmed_i = 0.5d0 * (r(i) + r(i-1))
-         vkick2 = (8.d0 * Mfly**2 * rmed_i**2) / 
-     &            (3.d0 * vfly**2 * bfly**4)
+         vkick2 = vkick2_s * rmed_i**2
          v2(i) = v2(i) + vkick2
          u(i) = 1.5d0 * v2(i)
          P(i) = rho(i) * v2(i)
@@ -574,7 +573,7 @@ c---evaporate mass due to collisions with host particles
       IF (Gamma_evap.NE.0.0d0) CALL evaporate
 
 C---Heating due to impulsive encounter
-      IF ( apply_impulse_iter ) THEN
+      IF ( flyby_triggered ) THEN
         CALL apply_impulse
       END IF
 
@@ -1829,6 +1828,7 @@ c---convert Mfly to characteristic mass units if flyby is on
          ELSE
             Mfly = Mfly * fc
          END IF
+         vkick2_s = (8.d0 * Mfly**2) / (3.d0 * vfly**2 * bfly**4)
       END IF
 
 c---write initial density profiles to file
@@ -2901,7 +2901,8 @@ c---compute rho_s in Msun/kpc^3
       IF (flyby_on) WRITE(*,*)'                    tfly = ',tfly
       IF (flyby_on) WRITE(*,*)'                    bfly = ',bfly
       IF (flyby_on) WRITE(*,*)'                    Mfly = ',Mfly
-      IF (flyby_on) WRITE(*,*)'                    vfly = ',vfly    
+      IF (flyby_on) WRITE(*,*)'                    vfly = ',vfly
+      IF (flyby_on) WRITE(*,*)'                vkick2_s = ',vkick2_s     
       WRITE(*,*)' '
       WRITE(*,*)'                 xlgrmin = ',xlgrmin
       WRITE(*,*)'                 xlgrmax = ',xlgrmax
