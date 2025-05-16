@@ -139,6 +139,8 @@ C---Doing a flyby at every multiple of 0.5
      &      t .LT. tfly .AND. t + dt .GE. tfly) THEN
           dt = tfly - t
           flyby_triggered = .TRUE.
+c---      Change the v2 kick to a rate so that it can change adaptively
+          vkick2_s = vkick2_s / dt
           last_impulse_time = tfly
         END IF
 
@@ -503,7 +505,8 @@ c-----------------------------------------------------------------------
 
       DO i = 1, Ngrid
          rmed_i = 0.5d0 * (r(i) + r(i-1))
-         vkick2 = vkick2_s * rmed_i**2
+c--- scale by dt so that if integration fails, the kick will be reduced
+         vkick2 = vkick2_s * rmed_i**2 * dt
          v2(i) = v2(i) + vkick2
          u(i) = 1.5d0 * v2(i)
          P(i) = rho(i) * v2(i)
