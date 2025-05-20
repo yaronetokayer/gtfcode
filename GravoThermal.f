@@ -175,7 +175,10 @@ c---stop criterion (we have reached well into core collapse)
         
 c---if density becomes NaN, terminate
 
-        IF (isnan(rho(1))) GOTO 102
+        IF (isnan(rho(1))) THEN
+          WRITE(*,*) ' stop condition: isnan(rho(1))'
+          GOTO 102
+        END IF
 
 c---keep track of core collapse time, defined as time when central
 c   density becomes 1000x minimum value over its past history
@@ -644,7 +647,8 @@ c---
 c---New method of computing the temperature gradients [CORRECT]
 
       DO i=1,Ngrid-1
-        IF (imode.EQ.5.AND.i.EQ.1) THEN
+        IF (i .EQ. 1 .AND. ((imode .EQ. 5) .OR. 
+     &     (imode .EQ. 6 .AND. gamma .LT. 1.0d0))) THEN
           dTdr = (v2(2) - v2(1)) / (r(2) - r(1))
           vmed = DSQRT(v2(1))
           Pmed = P(1)
@@ -904,8 +908,8 @@ c---determine elements of tridiagonal matrix
 
       DO i=1,Ngrid-1
         dP   = P(i+1)  - P(i)
-        drho = rho(i+1)+ rho(i)
-        dr   = r(i+1)  - r(i-1)
+        drho = rho(i+1) + rho(i)
+        dr   = r(i+1) - r(i-1)
          
         drho = MAX(1.0D-20,drho)
         IF (dP.EQ.0.0d0)   CALL Terminate('dP zero') 
