@@ -143,13 +143,6 @@ c---increment counters
         n = n + 1
         t = t + dt
 
-c---check if we are at the flyby time
-
-        ! IF ( apply_impulse_iter ) THEN
-        !   CALL apply_impulse
-        !   applied_impulse = .TRUE.
-        ! END IF
-
         CALL integrate_time_step(k,iN1,iN2,iN3)
 
         drho1 = ABS(rho(1)-rho_old1)/rho_old1
