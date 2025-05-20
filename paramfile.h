@@ -109,15 +109,18 @@ c---baryon properties
 
 c---parameters related to impulsive flyby
 
-      REAL*8 tfly         ! time at which flyby occurs in units of t0
-      REAL*8 bfly         ! impact parameter in units of rs
-      REAL*8 Mfly         ! perturber mass as fraction of ???
-      REAL*8 vfly         ! perturber velocity in units of v0
-      LOGICAL flyby_on    ! whether to apply the flyby impulse
-      LOGICAL apply_impulse_iter, applied_impulse ! for the loop
+      INTEGER ntfly, ntfly_max
+      PARAMETER (ntfly_max = 10)
+      REAL*8 tfly(ntfly_max) ! time at which flyby occurs in units of t0
+      REAL*8 bfly            ! impact parameter in units of rs
+      REAL*8 Mfly            ! perturber mass as fraction of Mtot
+      REAL*8 vfly            ! perturber velocity in units of v0
+      REAL*8 vkick2_s        ! vkick2 at scale radius
+      LOGICAL flyby_on       ! whether to apply the flyby impulse
+      LOGICAL flyby_triggered ! for the loop
 
-      COMMON /flybyparam/ tfly, bfly, Mfly, vfly, flyby_on,
-     &                    apply_impulse_iter, applied_impulse
+      COMMON /flybyparam/ tfly, bfly, Mfly, vfly, vkick2_s,ntfly,
+     &                    flyby_triggered, flyby_on
 
 c---properties related to initial profile
 
