@@ -6,3 +6,4 @@ GravoThermal
 
 # macOS system files
 .DS_Store
+*.in

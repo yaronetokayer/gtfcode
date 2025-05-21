@@ -12,8 +12,7 @@ c**********************************************************************
 
       INTEGER   k,j,n,iN1,iN2,iN3,Niter1,Niter2,Niter3,i
       REAL*8    drho1,drho2,rho_old1,rho_old2,rho_orig,rmed,sigma_orig
-      REAL*8    tcc,t0cmax,rho0min
-      REAL*8    last_impulse_time
+      REAL*8    tcc,t0cmax,rho0min,kecorei
       REAL      ai1,aver_iter1,aver_iter2,aver_iter3
       CHARACTER outfil1*60,outfil2*60,outfil3*60
       
@@ -67,6 +66,38 @@ c---compute various properties from density profile
 
       CALL get_properties
 
+c---convert Mp to characteristic mass units and compute Psink
+      IF (infall_pert) THEN
+         IF (imode .EQ. 6) THEN
+            Mp = Mp * chi
+         ELSE
+            Mp = Mp * fc
+         END IF
+c---Compute initial energy in the core
+        kecorei = 0.0d0
+        DO i = 1, Ngrid
+          IF (r(i) .LT. rc2) THEN
+            kecorei = kecorei + 0.5d0*M(i)*v2(i)
+          END IF
+        END DO
+        WRITE(*,*)'Initial core KE at', rc2, kecorei
+c---Compute Psink
+        DO i = 1, Ngrid
+          IF (r(i) .GE. Rst) THEN
+            WRITE(*,*)'Initial perturber KE at', r(i), 0.5d0*Mp*M(i)/Rst
+            WRITE(*,*)'ratio is ',0.5d0*Mp*M(i)/Rst/kecorei
+            Psink = 0.5d0*Mp*M(i) / (Rst * (tsinkf - tsinki))
+            EXIT
+          END IF
+        END DO
+
+c---Output the ratio
+      END IF
+
+c---write to important quantities to screen & logfile
+      
+      CALL OUTPUT_PARAMS
+
 c---output column captions for interpretation
 
       WRITE(*,*)'           >>> Gravo-Thermal Collapse <<< '
@@ -117,8 +148,7 @@ c   parameters that are used to gauge evolution in central density
       rho_old2 = rho(1)
       rho_orig = rho(1)
       rho0min = rho(1)
-      flyby_triggered = .FALSE.
-      last_impulse_time = 0.0d0
+      infall_triggered = .FALSE.
 
 c---integrate time steps until stopping criterion is reached
       
@@ -127,23 +157,25 @@ c---integrate time steps until stopping criterion is reached
       Niter3 = 0.0
       DO WHILE (t.LT.tstop)
 
+        marker_hit = .FALSE.
+
         CALL set_time_step
         IF (k.EQ.0) dt=1.0E-7
 
-c---ensure that an integration is performed at tfly
+c---check if infalling heating should be applied
 
-        IF (flyby_on) THEN
-          DO i = 1, ntfly
-            IF (last_impulse_time .NE. tfly(i) .AND.
-     &         t .LT. tfly(i) .AND. t + dt .GE. tfly(i)) THEN
-              dt = tfly(i) - t
-              flyby_triggered = .TRUE.
-c---Change the v2 kick to a rate so that it can change adaptively
-              vkick2_s = vkick2_s / dt
-              last_impulse_time = tfly(i)
-              EXIT   ! Only trigger one impulse per timestep
-            END IF
-          END DO
+        IF (infall_pert) THEN
+          IF (t .LT. tsinki .AND. t + dt .GE. tsinki) THEN
+c--- Ensure next step lands exactly on tsinki
+            dt = tsinki - t
+          ELSE IF (t .LT. tsinkf .AND. t + dt .GE. tsinkf) THEN
+c--- Ensure next step lands exactly on tsinkf
+            dt = tsinkf - t
+          END IF
+
+          IF (t .GE. tsinki .AND. t .LT. tsinkf) THEN
+            infall_triggered = .TRUE. ! turned off at end of while loop
+          END IF
         END IF
 
 c---increment counters
@@ -203,7 +235,7 @@ c    density has changed by >0.02)
 c---write profiles to file (everytime when log of central 
 c    density has changed by >0.1)
 
-        IF (drho2.GT.0.1 .OR. flyby_triggered) THEN 
+        IF (drho2.GT.0.1) THEN 
           j = j + 1
           rho_old2 = rho(1)
           CALL write_output(j)
@@ -212,7 +244,9 @@ c    density has changed by >0.1)
 
 c---update logfile
 
-        IF (MOD(k,100000).EQ.0 .OR. flyby_triggered) THEN 
+        IF (MOD(k,100000).EQ.0) THEN 
+          IF (infall_triggered) WRITE(*,*)'INFALL TRIGGERED'
+          IF (marker_hit) WRITE(*,*)'MARKER HIT'
           CALL get_time
           aver_iter1 = FLOAT(Niter1)/100000.0
           aver_iter2 = FLOAT(Niter2)/100000.0
@@ -228,7 +262,7 @@ c---update logfile
      &      aver_iter1,aver_iter2,aver_iter3
         END IF
 
-        IF (flyby_triggered) flyby_triggered = .FALSE.
+        IF (infall_triggered) infall_triggered = .FALSE.
 
       END DO
   101 CONTINUE
@@ -487,32 +521,62 @@ c---make radial grid to be used
         r(i) = 10.0d0**xlgr
       END DO
       
-c---write to screen important quantities to screen & logfile
-      
-      CALL OUTPUT_PARAMS
-      
       RETURN
       END
 
 c***********************************************************************
 
-      SUBROUTINE apply_impulse
+      SUBROUTINE heat_dump
 c-----------------------------------------------------------------------
-c  Apply an impulsive velocity kick to each shell due to a flyby
-c  Formula: Δv² = (2/3) * 4 * G² * M_p² * r² / (v_p² * b⁴)
-C  Adds to the velocity dispersion squared array v2(i)
+c  Injects heat into the system during the infall of a perturber.
+c  This routine is called during the time interval [tsinki, tsinkf]
+c  and modifies the radial velocity dispersion profile v2(r)
+c  according to a chosen radial heating function (e.g., Gaussian or
+c  softened step).
 c-----------------------------------------------------------------------
 
       INCLUDE 'paramfile.h'
 
       INTEGER i
-      REAL*8  rmed_i,vkick2
+      REAL*8  rmed_i, v2_add, normfac, profile_val
+      REAL*8  volume_i, dE_target, total_weight
+      REAL*8  f_profile(Ngrid)
+      REAL*8  sigma_frac, rcore, expstep
+
+c--- Define tunable profile parameters
+      sigma_frac = 0.1d0
+      rcore = rc2
+      expstep = 7.0d0
+
+c--- Compute the heating profile f(r) and its normalization
+      dE_target = Psink * dt
+      total_weight = 0.0d0
 
       DO i = 1, Ngrid
-         rmed_i = 0.5d0 * (r(i) + r(i-1))
-c--- scale by dt so that if integration fails, the kick will be reduced
-         vkick2 = vkick2_s * rmed_i**2 * dt
-         v2(i) = v2(i) + vkick2
+        rmed_i = 0.5d0 * (r(i) + r(i-1))
+        IF (heat_func .EQ. 1) THEN
+          f_profile(i) = EXP(-0.5d0 * 
+     &                   ((rmed_i - rcore)/(sigma_frac * rcore))**2)
+        ELSE IF (heat_func .EQ. 2) THEN
+          f_profile(i) = 1.0d0 / (1.0d0 + (rmed_i / rcore)**expstep)
+        ELSE
+          f_profile(i) = 0.0d0
+        END IF
+        volume_i = (1.d0/3.d0) * (r(i)**3 - r(i-1)**3)
+        total_weight = total_weight + 
+     &                0.5d0 * rho(i) * f_profile(i) * volume_i
+      END DO
+
+      IF (total_weight .GT. 0.0d0) THEN
+        normfac = dE_target / total_weight
+      ELSE
+        normfac = 0.0d0
+      END IF
+
+c--- Apply heating to v2 and update u and P
+      DO i = 1, Ngrid
+         v2_add = normfac * f_profile(i)
+         v2(i) = v2(i) + v2_add
          u(i) = 1.5d0 * v2(i)
          P(i) = rho(i) * v2(i)
       END DO
@@ -544,6 +608,11 @@ c---store current state in case we need to revert back to it
         a4(i) = u(i)
         a5(i) = rho(i)
       END DO
+
+C---Heating due to infalling perturber
+      IF ( infall_triggered ) THEN
+        CALL heat_dump
+      END IF
               
 c---compute the luminosities for all grid points
 
@@ -579,11 +648,6 @@ c   timestep. Iterate if needed
 c---evaporate mass due to collisions with host particles
  
       IF (Gamma_evap.NE.0.0d0) CALL evaporate
-
-C---Heating due to impulsive encounter
-      IF ( flyby_triggered ) THEN
-        CALL apply_impulse
-      END IF
 
 c---revirialize
 
@@ -793,7 +857,7 @@ c-----------------------------------------------------------------------
       REAL*8  Xvec(Ngrid-1),Yvec(Ngrid-1)
           
       REAL*8  Mbaryon
-            
+
 c---
      
       Failed =.FALSE.
@@ -899,7 +963,7 @@ c-----------------------------------------------------------------------
       REAL*8  Xvec(Ngrid-1),Yvec(Ngrid-1)
           
       REAL*8  Mbaryon
-            
+
 c---
      
       Failed =.FALSE.
@@ -1830,15 +1894,6 @@ c---convert cross section per unit mass to dimensionless form
 
       sigma_m = sigma_m / sigma0
 
-c---convert Mfly to characteristic mass units if flyby is on
-      IF (flyby_on) THEN
-         IF (imode .EQ. 6) THEN
-            Mfly = Mfly * chi
-         ELSE
-            Mfly = Mfly * fc
-         END IF
-      END IF
-
 c---write initial density profiles to file
 
       outfile='/initprof.dat'
@@ -2069,51 +2124,41 @@ c---mode-specific parameter definitions
         prefac = prefac * DEXP(1.0d0/eta)
       END IF
 
-c---flyby parameters for impulsive heating
+c---parameters for infalling perturber
 
-      WRITE(*,*)' flyby_on? '
-      READ(*,*)flyby_on
-      WRITE(*,*)'  flyby_on = ',flyby_on
+      WRITE(*,*)' infalling perturber? '
+      READ(*,*)infall_pert
+      WRITE(*,*)'  infall_pert = ',infall_pert
       WRITE(*,*)' '
 
-      WRITE(*,*)' Number of flyby times to input (<=', ntfly_max, '):'
-      READ(*,*) ntfly
-
-      IF (ntfly .GT. ntfly_max) THEN
-          CALL Terminate('Too many tfly values')
-      END IF
-
-      WRITE(*,*) ' Enter ', ntfly, ' tfly values (in units of t0):'
-      READ(*,*) (tfly(i), i = 1, ntfly)
-
-      WRITE(*,*) ' tfly values (in units of t0) '
-      DO i = 1, ntfly
-          WRITE(*,*) tfly(i)
-      END DO
-
-      IF (.NOT. flyby_on) THEN
-          DO i = 1, ntfly
-              tfly(i) = 0.0d0
-          END DO
-      END IF
-
-      WRITE(*,*)' bfly (in units of rs) '
-      READ(*,*)bfly
-      WRITE(*,*)'  bfly = ',bfly
+      WRITE(*,*)' specify heating function '
+      READ(*,*)heat_func
+      WRITE(*,*)'  heat_func = ',heat_func
       WRITE(*,*)' '
-      IF (.NOT. flyby_on) bfly=0.0d0
 
-      WRITE(*,*)' Mfly (as fraction of Mtot or Mvir) '
-      READ(*,*)Mfly
-      WRITE(*,*)'  Mfly = ',Mfly
+      WRITE(*,*)' tsinki (in units of t0) '
+      READ(*,*)tsinki
+      WRITE(*,*)'  tsinki = ',tsinki
       WRITE(*,*)' '
-      IF (.NOT. flyby_on) Mfly=0.0d0
+      IF (.NOT. infall_pert) tsinki=0.0d0
 
-      WRITE(*,*)' vfly (in units of v0) '
-      READ(*,*)vfly
-      WRITE(*,*)'  vfly = ',vfly
+      WRITE(*,*)' tsinkf (in units of t0) '
+      READ(*,*)tsinkf
+      WRITE(*,*)'  tsinkf = ',tsinkf
       WRITE(*,*)' '
-      IF (.NOT. flyby_on) vfly=0.0d0
+      IF (.NOT. infall_pert) tsinkf=0.0d0
+
+      WRITE(*,*)' Mp (as fraction of Mtot or Mvir) '
+      READ(*,*)Mp
+      WRITE(*,*)'  Mp = ',Mp
+      WRITE(*,*)' '
+      IF (.NOT. infall_pert) Mp=0.0d0
+
+      WRITE(*,*)' Stalling radius (in units of r_s) '
+      READ(*,*)Rst
+      WRITE(*,*)'  Rst = ',Rst
+      WRITE(*,*)' '
+      IF (.NOT. infall_pert) Rst=0.0d0
       
 c----minimum and maximum radius of radial grid
       
@@ -2921,15 +2966,13 @@ c---compute rho_s in Msun/kpc^3
       IF (imode.EQ.3) WRITE(*,*)'                     Z_t = ',Zt
       IF (imode.EQ.4) WRITE(*,*)'         r_decay/r_trunc = ',eta
       WRITE(*,*)' '
-      WRITE(*,*)'                flyby_on = ',flyby_on
-      IF (flyby_on) THEN
-        WRITE(*,*) '                    tfly = ',
-     &               (tfly(i), i = 1, ntfly)
-      END IF
-      IF (flyby_on) WRITE(*,*)'                    bfly = ',bfly
-      IF (flyby_on) WRITE(*,*)'                    Mfly = ',Mfly
-      IF (flyby_on) WRITE(*,*)'                    vfly = ',vfly
-      IF (flyby_on) WRITE(*,*)'                vkick2_s = ',vkick2_s  
+      WRITE(*,*)'             infall_pert = ',infall_pert
+      IF (infall_pert) WRITE(*,*)'               heat_func = ',heat_func
+      IF (infall_pert) WRITE(*,*)'                  tsinki = ',tsinki
+      IF (infall_pert) WRITE(*,*)'                  tsinkf = ',tsinkf
+      IF (infall_pert) WRITE(*,*)'                      Mp = ',Mp
+      IF (infall_pert) WRITE(*,*)'                     Rst = ',Rst
+      IF (infall_pert) WRITE(*,*)'                   Psink = ',Psink
       WRITE(*,*)' '
       WRITE(*,*)'                 xlgrmin = ',xlgrmin
       WRITE(*,*)'                 xlgrmax = ',xlgrmax
@@ -2981,15 +3024,13 @@ c---write same info to logfile
       IF (imode.EQ.3) WRITE(97,*)'                     Z_t = ',Zt
       IF (imode.EQ.4) WRITE(97,*)'         r_decay/r_trunc = ',eta
       WRITE(97,*)' '
-      WRITE(97,*)'                flyby_on = ',flyby_on
-      IF (flyby_on) THEN
-        WRITE(97,*) '                    tfly = ',
-     &               (tfly(i), i = 1, ntfly)
-      END IF
-      IF (flyby_on) WRITE(97,*)'                    bfly = ',bfly
-      IF (flyby_on) WRITE(97,*)'                    Mfly = ',Mfly
-      IF (flyby_on) WRITE(97,*)'                    vfly = ',vfly
-      IF (flyby_on) WRITE(97,*)'                vkick2_s = ',vkick2_s
+      WRITE(97,*)'             infall_pert = ',infall_pert
+      IF (infall_pert) WRITE(97,*)'              heat_func = ',heat_func
+      IF (infall_pert) WRITE(97,*)'                  tsinki = ',tsinki
+      IF (infall_pert) WRITE(97,*)'                  tsinkf = ',tsinkf
+      IF (infall_pert) WRITE(97,*)'                      Mp = ',Mp
+      IF (infall_pert) WRITE(97,*)'                     Rst = ',Rst
+      IF (infall_pert) WRITE(97,*)'                   Psink = ',Psink
       WRITE(97,*)' '
       WRITE(97,*)'                 xlgrmin = ',xlgrmin
       WRITE(97,*)'                 xlgrmax = ',xlgrmax
