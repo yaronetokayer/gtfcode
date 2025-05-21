@@ -12,7 +12,7 @@ c**********************************************************************
 
       INTEGER   k,j,n,iN1,iN2,iN3,Niter1,Niter2,Niter3,i
       REAL*8    drho1,drho2,rho_old1,rho_old2,rho_orig,rmed,sigma_orig
-      REAL*8    tcc,t0cmax,rho0min,kecorei
+      REAL*8    tcc,t0cmax,rho0min
       REAL      ai1,aver_iter1,aver_iter2,aver_iter3
       CHARACTER outfil1*60,outfil2*60,outfil3*60
       
@@ -80,12 +80,10 @@ c---Compute initial energy in the core
             kecorei = kecorei + 0.5d0*M(i)*v2(i)
           END IF
         END DO
-        WRITE(*,*)'Initial core KE at', rc2, kecorei
 c---Compute Psink
         DO i = 1, Ngrid
           IF (r(i) .GE. Rst) THEN
-            WRITE(*,*)'Initial perturber KE at', r(i), 0.5d0*Mp*M(i)/Rst
-            WRITE(*,*)'ratio is ',0.5d0*Mp*M(i)/Rst/kecorei
+            eratio = 0.5d0*Mp*M(i)/Rst/kecorei
             Psink = 0.5d0*Mp*M(i) / (Rst * (tsinkf - tsinki))
             EXIT
           END IF
@@ -156,8 +154,6 @@ c---integrate time steps until stopping criterion is reached
       Niter2 = 0.0
       Niter3 = 0.0
       DO WHILE (t.LT.tstop)
-
-        marker_hit = .FALSE.
 
         CALL set_time_step
         IF (k.EQ.0) dt=1.0E-7
@@ -246,7 +242,6 @@ c---update logfile
 
         IF (MOD(k,100000).EQ.0) THEN 
           IF (infall_triggered) WRITE(*,*)'INFALL TRIGGERED'
-          IF (marker_hit) WRITE(*,*)'MARKER HIT'
           CALL get_time
           aver_iter1 = FLOAT(Niter1)/100000.0
           aver_iter2 = FLOAT(Niter2)/100000.0
@@ -2973,6 +2968,8 @@ c---compute rho_s in Msun/kpc^3
       IF (infall_pert) WRITE(*,*)'                      Mp = ',Mp
       IF (infall_pert) WRITE(*,*)'                     Rst = ',Rst
       IF (infall_pert) WRITE(*,*)'                   Psink = ',Psink
+      IF (infall_pert) WRITE(*,*)'                  kecorei = ',kecorei
+      IF (infall_pert) WRITE(*,*)'                   eratio = ',eratio
       WRITE(*,*)' '
       WRITE(*,*)'                 xlgrmin = ',xlgrmin
       WRITE(*,*)'                 xlgrmax = ',xlgrmax
@@ -3031,6 +3028,8 @@ c---write same info to logfile
       IF (infall_pert) WRITE(97,*)'                      Mp = ',Mp
       IF (infall_pert) WRITE(97,*)'                     Rst = ',Rst
       IF (infall_pert) WRITE(97,*)'                   Psink = ',Psink
+      IF (infall_pert) WRITE(97,*)'                  kecorei = ',kecorei
+      IF (infall_pert) WRITE(97,*)'                   eratio = ',eratio
       WRITE(97,*)' '
       WRITE(97,*)'                 xlgrmin = ',xlgrmin
       WRITE(97,*)'                 xlgrmax = ',xlgrmax

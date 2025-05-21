@@ -83,10 +83,6 @@ c=======================================================================
 c                        COMMON BLOCKS
 c=======================================================================
 
-c---debugging
-      LOGICAL marker_hit
-      COMMON /debugg/ marker_hit
-
 c---cosmology
 
       REAL*8   xhubble,xH_0,omega_0,omega_lambda
@@ -117,12 +113,14 @@ c---parameters related to infalling perturber
       REAL*8 Rst             ! impact parameter in units of rs
       REAL*8 Mp              ! perturber mass
       REAL*8 Psink           ! power of heating
+      REAL*8 kecorei,eratio  ! initial KE of core
       INTEGER heat_func      ! option for location of heating
       LOGICAL infall_pert    ! whether to model an infalling perturber
       LOGICAL infall_triggered ! for the loop
 
-      COMMON /infallparam/ tsinki, tsinkf, Mp, Rst, Psink, heat_func,
-     &                    infall_pert, infall_triggered
+      COMMON /infallparam/ tsinki, tsinkf, Mp, Rst, Psink, kecorei,
+     &                    eratio, heat_func, infall_pert,
+     &                    infall_triggered
 
 c---properties related to initial profile
 
