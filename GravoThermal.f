@@ -155,6 +155,8 @@ c---integrate time steps until stopping criterion is reached
       Niter3 = 0.0
       DO WHILE (t.LT.tstop)
 
+        checkpoint = .FALSE.
+
         CALL set_time_step
         IF (k.EQ.0) dt=1.0E-7
 
@@ -242,6 +244,7 @@ c---update logfile
 
         IF (MOD(k,100000).EQ.0) THEN 
           IF (infall_triggered) WRITE(*,*)'INFALL TRIGGERED'
+          IF (checkpoint) WRITE(*,*)'CHECKPOINT HIT'
           CALL get_time
           aver_iter1 = FLOAT(Niter1)/100000.0
           aver_iter2 = FLOAT(Niter2)/100000.0
@@ -572,7 +575,7 @@ c--- Apply heating to v2 and update u and P
       DO i = 1, Ngrid
          v2_add = normfac * f_profile(i)
 c---Modified this next line to take into account conduct_heat
-         v2(i) = v2(i) + v2_add + (2.0d0/3.0d0) * u(i)
+         v2(i) = v2(i) + v2_add ! + (2.0d0/3.0d0) * u(i)
          u(i) = 1.5d0 * v2(i)
          P(i) = rho(i) * v2(i)
       END DO
@@ -640,11 +643,6 @@ c---evaporate mass due to collisions with host particles
  
       IF (Gamma_evap.NE.0.0d0) CALL evaporate
 
-C---Heating due to infalling perturber
-      IF ( infall_triggered ) THEN
-        CALL heat_dump
-      END IF
-
 c---revirialize
 
  34   CONTINUE
@@ -681,6 +679,50 @@ c         initial numerical virialization
 cc          CALL Terminate('Maximum revirialization iterations reached')
         END IF
       END IF
+
+C---Heating due to infalling perturber
+      IF ( infall_triggered ) THEN
+ 42     CALL heat_dump
+      END IF
+
+C---Recall revirialize
+      iter2 = 1
+      iter3 = 1
+ 43   CONTINUE
+      CALL revirialize
+ 
+      IF (Failed) THEN
+        t = t - dt
+        dt = dt / 2.0d0
+        t = t + dt
+        DO i=1,Ngrid
+          M(i) = a0(i)
+          v2(i)= a1(i)
+          r(i) = a2(i)
+          P(i) = a3(i)
+          u(i) = a4(i)
+          rho(i)=a5(i)
+        END DO
+        iter2 = iter2 + 1
+        IF (iter2.EQ.10) CALL Terminate('No convergence achieved iter2')
+        WRITE(*,*)' TimeStep Iteration:',iter2,dt
+        GOTO 42
+      END IF
+
+c---check to see if relaxation step was successful 
+c   NOTE: in first time step we accept larger dr in order to allow 
+c         initial numerical virialization
+
+      IF (drmax.GT.eps_dr.AND.istep.NE.1) THEN
+        iter3 = iter3 + 1
+        IF (iter3.LE.20000) THEN
+          GOTO 43
+        ELSE
+          WRITE(*,*)'WARNING: Max revirialization iterations reached'
+cc          CALL Terminate('Maximum revirialization iterations reached')
+        END IF
+      END IF
+C---END OF REPEAT
 
 c---update the actual eps_dt values used
       

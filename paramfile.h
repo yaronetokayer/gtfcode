@@ -83,6 +83,11 @@ c=======================================================================
 c                        COMMON BLOCKS
 c=======================================================================
 
+c---debugging
+
+      LOGICAL checkpoint
+      COMMON /debug/ checkpoint
+
 c---cosmology
 
       REAL*8   xhubble,xH_0,omega_0,omega_lambda
