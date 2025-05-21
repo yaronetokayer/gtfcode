@@ -571,7 +571,8 @@ c--- Compute the heating profile f(r) and its normalization
 c--- Apply heating to v2 and update u and P
       DO i = 1, Ngrid
          v2_add = normfac * f_profile(i)
-         v2(i) = v2(i) + v2_add
+c---Modified this next line to take into account conduct_heat
+         v2(i) = v2(i) + v2_add + (2.0d0/3.0d0) * u(i)
          u(i) = 1.5d0 * v2(i)
          P(i) = rho(i) * v2(i)
       END DO
@@ -603,11 +604,6 @@ c---store current state in case we need to revert back to it
         a4(i) = u(i)
         a5(i) = rho(i)
       END DO
-
-C---Heating due to infalling perturber
-      IF ( infall_triggered ) THEN
-        CALL heat_dump
-      END IF
               
 c---compute the luminosities for all grid points
 
@@ -643,6 +639,11 @@ c   timestep. Iterate if needed
 c---evaporate mass due to collisions with host particles
  
       IF (Gamma_evap.NE.0.0d0) CALL evaporate
+
+C---Heating due to infalling perturber
+      IF ( infall_triggered ) THEN
+        CALL heat_dump
+      END IF
 
 c---revirialize
 
