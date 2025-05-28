@@ -18,6 +18,9 @@ c**********************************************************************
       
       INTEGER   lblnk
       EXTERNAL  lblnk
+
+      REAL*8    Mptmass
+      EXTERNAL  Mptmass
       
 c**********************************************************************
  
@@ -66,13 +69,17 @@ c---compute various properties from density profile
 
       CALL get_properties
 
+c-----------------------------------------------------------------------
+c  This block is for infalling perturber stuff
+c-----------------------------------------------------------------------
+
 c---convert Mp to characteristic mass units and compute Psink
       IF (infall_pert) THEN
-         IF (imode .EQ. 6) THEN
-            Mp = Mp * chi
-         ELSE
-            Mp = Mp * fc
-         END IF
+        IF (imode .EQ. 6) THEN
+          Mp = Mp * chi
+        ELSE
+          Mp = Mp * fc
+        END IF
 c---Compute initial energy in the core
         kecorei = 0.0d0
         DO i = 1, Ngrid
@@ -88,9 +95,11 @@ c---Compute Psink
             EXIT
           END IF
         END DO
-
-c---Output the ratio
+c--Compute rate of mass gain
       END IF
+      Mrate = Mp / (tsinkf - tsinki)
+      WRITE(*,*)'Mrate ', Mrate
+c***********************************************************************
 
 c---write to important quantities to screen & logfile
       
@@ -201,7 +210,8 @@ c---keep track of density and time at maximum core
 
 c---stop criterion (we have reached well into core collapse)
 
-        IF (rho(1).GT.1500.0.AND.t.GT.50.0) GOTO 101
+c        IF (rho(1).GT.1500.0.AND.t.GT.50.0) GOTO 101
+        IF (rho(1).GT.1500.0) GOTO 101
         
 c---if density becomes NaN, terminate
 
@@ -245,6 +255,7 @@ c---update logfile
         IF (MOD(k,100000).EQ.0) THEN 
           IF (infall_triggered) WRITE(*,*)'INFALL TRIGGERED'
           IF (checkpoint) WRITE(*,*)'CHECKPOINT HIT'
+          WRITE(*,*) Mptmass(t)
           CALL get_time
           aver_iter1 = FLOAT(Niter1)/100000.0
           aver_iter2 = FLOAT(Niter2)/100000.0
@@ -683,46 +694,49 @@ cc          CALL Terminate('Maximum revirialization iterations reached')
 C---Heating due to infalling perturber
       IF ( infall_triggered ) THEN
  42     CALL heat_dump
-      END IF
 
 C---Recall revirialize
-      iter2 = 1
-      iter3 = 1
- 43   CONTINUE
-      CALL revirialize
- 
-      IF (Failed) THEN
-        t = t - dt
-        dt = dt / 2.0d0
-        t = t + dt
-        DO i=1,Ngrid
-          M(i) = a0(i)
-          v2(i)= a1(i)
-          r(i) = a2(i)
-          P(i) = a3(i)
-          u(i) = a4(i)
-          rho(i)=a5(i)
-        END DO
-        iter2 = iter2 + 1
-        IF (iter2.EQ.10) CALL Terminate('No convergence achieved iter2')
-        WRITE(*,*)' TimeStep Iteration:',iter2,dt
-        GOTO 42
-      END IF
+        checkpoint = .TRUE.
+        iter2 = 1
+        iter3 = 1
+ 43     CONTINUE
+        CALL revirialize
+  
+        IF (Failed) THEN
+          t = t - dt
+          dt = dt / 2.0d0
+          t = t + dt
+          DO i=1,Ngrid
+            M(i) = a0(i)
+            v2(i)= a1(i)
+            r(i) = a2(i)
+            P(i) = a3(i)
+            u(i) = a4(i)
+            rho(i)=a5(i)
+          END DO
+          iter2 = iter2 + 1
+          IF (iter2.EQ.10) THEN
+            CALL Terminate('No convergence achieved iter2')
+          END IF
+          WRITE(*,*)' TimeStep Iteration:',iter2,dt
+          GOTO 42
+        END IF
 
 c---check to see if relaxation step was successful 
 c   NOTE: in first time step we accept larger dr in order to allow 
 c         initial numerical virialization
 
-      IF (drmax.GT.eps_dr.AND.istep.NE.1) THEN
-        iter3 = iter3 + 1
-        IF (iter3.LE.20000) THEN
-          GOTO 43
-        ELSE
-          WRITE(*,*)'WARNING: Max revirialization iterations reached'
+        IF (drmax.GT.eps_dr.AND.istep.NE.1) THEN
+          iter3 = iter3 + 1
+          IF (iter3.LE.20000) THEN
+            GOTO 43
+          ELSE
+            WRITE(*,*)'WARNING: Max revirialization iterations reached'
 cc          CALL Terminate('Maximum revirialization iterations reached')
+          END IF
         END IF
-      END IF
 C---END OF REPEAT
+      END IF
 
 c---update the actual eps_dt values used
       
@@ -1001,6 +1015,9 @@ c-----------------------------------------------------------------------
       REAL*8  Xvec(Ngrid-1),Yvec(Ngrid-1)
           
       REAL*8  Mbaryon
+      REAL*8  Mptmass
+
+      EXTERNAL Mptmass
 
 c---
      
@@ -1025,7 +1042,7 @@ c---determine elements of tridiagonal matrix
         q1 = r(i+1) / dr
         q2 = q1 - 1.0d0
 
-        MM = M(i) + Mbaryon(r(i)) 
+        MM = M(i) + Mbaryon(r(i)) + Mptmass(t)
         dd = -((4.0d0/MM) * (r(i)**2/dr) * (dP/drho))
         
         c1 = 5.0d0 * dd * (P(i+1)/dP) - 3.0d0 * (rho(i+1)/drho)
@@ -1571,6 +1588,28 @@ c-----------------------------------------------------------------------
 c---
 
       Mbaryon = zeta_b * rr**0.6
+
+      END
+      
+c***********************************************************************
+
+      REAL*8 FUNCTION Mptmass(tt)
+c-----------------------------------------------------------------------
+c  Perturber point mass in the center
+c-----------------------------------------------------------------------
+
+      INCLUDE 'paramfile.h'
+
+      REAL*8   tt
+      
+c---
+      IF (tt.LE.tsinki) THEN
+        Mptmass = 0
+      ELSE IF (tt.GT.tsinki .AND. tt.LE.tsinkf ) THEN
+        Mptmass = Mrate * (tt - tsinki)
+      ELSE IF (tt .GE. tsinkf) THEN
+        Mptmass = Mp
+      END IF
 
       END
       
@@ -2178,19 +2217,19 @@ c---parameters for infalling perturber
       READ(*,*)tsinki
       WRITE(*,*)'  tsinki = ',tsinki
       WRITE(*,*)' '
-      IF (.NOT. infall_pert) tsinki=0.0d0
+c      IF (.NOT. infall_pert) tsinki=0.0d0
 
       WRITE(*,*)' tsinkf (in units of t0) '
       READ(*,*)tsinkf
       WRITE(*,*)'  tsinkf = ',tsinkf
       WRITE(*,*)' '
-      IF (.NOT. infall_pert) tsinkf=0.0d0
+c      IF (.NOT. infall_pert) tsinkf=0.0d0
 
       WRITE(*,*)' Mp (as fraction of Mtot or Mvir) '
       READ(*,*)Mp
       WRITE(*,*)'  Mp = ',Mp
       WRITE(*,*)' '
-      IF (.NOT. infall_pert) Mp=0.0d0
+c      IF (.NOT. infall_pert) Mp=0.0d0
 
       WRITE(*,*)' Stalling radius (in units of r_s) '
       READ(*,*)Rst

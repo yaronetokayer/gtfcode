@@ -118,13 +118,14 @@ c---parameters related to infalling perturber
       REAL*8 Rst             ! impact parameter in units of rs
       REAL*8 Mp              ! perturber mass
       REAL*8 Psink           ! power of heating
+      REAL*8 Mrate           ! rate of point mass growth
       REAL*8 kecorei,eratio  ! initial KE of core
       INTEGER heat_func      ! option for location of heating
       LOGICAL infall_pert    ! whether to model an infalling perturber
       LOGICAL infall_triggered ! for the loop
 
       COMMON /infallparam/ tsinki, tsinkf, Mp, Rst, Psink, kecorei,
-     &                    eratio, heat_func, infall_pert,
+     &                    eratio, Mrate,heat_func, infall_pert,
      &                    infall_triggered
 
 c---properties related to initial profile
