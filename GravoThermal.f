@@ -1630,7 +1630,7 @@ c-----------------------------------------------------------------------
 
       INCLUDE 'paramfile.h'
 
-      REAL*8   tt, rr
+      REAL*8   tt, rr, Rpt
 
 c--- Determine instantaneous perturber radius
       IF (tt .LE. tsinki) THEN
@@ -1663,7 +1663,7 @@ c-----------------------------------------------------------------------
 
       INCLUDE 'paramfile.h'
 
-      REAL*8   tt, rr
+      REAL*8   tt, rr, Rpt
 
 c--- Determine instantaneous perturber radius
       IF (tt .LE. tsinki) THEN
