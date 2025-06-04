@@ -139,7 +139,7 @@ c---ensure that an integration is performed at tfly
               dt = tfly(i) - t
               flyby_triggered = .TRUE.
 c---Change the v2 kick to a rate so that it can change adaptively
-              vkick2_s = vkick2_s / dt
+              vkick2_s_rate = vkick2_s / dt
               last_impulse_time = tfly(i)
               EXIT   ! Only trigger one impulse per timestep
             END IF
@@ -511,7 +511,7 @@ c-----------------------------------------------------------------------
       DO i = 1, Ngrid
          rmed_i = 0.5d0 * (r(i) + r(i-1))
 c--- scale by dt so that if integration fails, the kick will be reduced
-         vkick2 = vkick2_s * rmed_i**2 * dt
+         vkick2 = vkick2_s_rate * rmed_i**2 * dt
          v2(i) = v2(i) + vkick2
          u(i) = 1.5d0 * v2(i)
          P(i) = rho(i) * v2(i)
@@ -1837,6 +1837,7 @@ c---convert Mfly to characteristic mass units if flyby is on
          ELSE
             Mfly = Mfly * fc
          END IF
+         vkick2_s = 8.d0 * Mfly**2 / (3.d0 * vfly**2 * bfly**4)
       END IF
 
 c---write initial density profiles to file
