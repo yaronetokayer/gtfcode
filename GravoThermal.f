@@ -1612,6 +1612,72 @@ c---
       END IF
 
       END
+
+c***********************************************************************
+
+      REAL*8 FUNCTION Mpert_sphere(tt, rr)
+c-----------------------------------------------------------------------
+c  Perturber mass contribution (spherical model) enclosed within radius
+c  rr
+c  During infall, the perturber is modeled as a uniform sphere whose
+c  radius decreases linearly from Rst to 0 between tsinki and tsinkf.
+c-----------------------------------------------------------------------
+
+      INCLUDE 'paramfile.h'
+
+      REAL*8   tt, rr
+
+c--- Determine instantaneous perturber radius
+      IF (tt .LE. tsinki) THEN
+         Rpt = Rst
+      ELSE IF (tt .GE. tsinkf) THEN
+         Rpt = 0.d0
+      ELSE
+         Rpt = Rst * (1.d0 - (tt - tsinki) / (tsinkf - tsinki))
+      END IF
+
+c--- Compute enclosed mass based on uniform sphere model
+      IF (rr .GE. Rpt .OR. Rpt .EQ. 0.d0) THEN
+         Mpert_sphere = Mp
+      ELSE
+c--- Enclosed mass in uniform sphere: M(r) = Mp * (r/Rpt)^3
+         Mpert_sphere = Mp * (rr / Rpt)**3
+      END IF
+
+      RETURN
+      END
+
+c***********************************************************************
+
+      REAL*8 FUNCTION Mpert_shell(tt, rr)
+c-----------------------------------------------------------------------
+c  Perturber mass contribution (shell model) enclosed within radius rr
+c  During infall, the perturber is modeled as a thin shell whose
+c  radius decreases linearly from Rst to 0 between tsinki and tsinkf.
+c-----------------------------------------------------------------------
+
+      INCLUDE 'paramfile.h'
+
+      REAL*8   tt, rr
+
+c--- Determine instantaneous perturber radius
+      IF (tt .LE. tsinki) THEN
+         Rpt = Rst
+      ELSE IF (tt .GE. tsinkf) THEN
+         Rpt = 0.d0
+      ELSE
+         Rpt = Rst * (1.d0 - (tt - tsinki) / (tsinkf - tsinki))
+      END IF
+
+c--- Compute enclosed mass based on thin shell model
+      IF (rr .GE. Rpt) THEN
+         Mpert_shell = Mp
+      ELSE
+         Mpert_shell = 0.d0
+      END IF
+
+      RETURN
+      END
       
 c***********************************************************************
 
@@ -2235,7 +2301,7 @@ c      IF (.NOT. infall_pert) Mp=0.0d0
       READ(*,*)Rst
       WRITE(*,*)'  Rst = ',Rst
       WRITE(*,*)' '
-      IF (.NOT. infall_pert) Rst=0.0d0
+c      IF (.NOT. infall_pert) Rst=0.0d0
       
 c----minimum and maximum radius of radial grid
       

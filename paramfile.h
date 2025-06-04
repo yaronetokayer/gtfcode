@@ -115,7 +115,7 @@ c---baryon properties
 c---parameters related to infalling perturber
 
       REAL*8 tsinki, tsinkf  ! start and end times of heat dump
-      REAL*8 Rst             ! impact parameter in units of rs
+      REAL*8 Rst             ! stalling radius in units of rs
       REAL*8 Mp              ! perturber mass
       REAL*8 Psink           ! power of heating
       REAL*8 Mrate           ! rate of point mass growth
