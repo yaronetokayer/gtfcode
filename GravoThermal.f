@@ -255,7 +255,7 @@ c---update logfile
         IF (MOD(k,100000).EQ.0) THEN 
           IF (infall_triggered) WRITE(*,*)'INFALL TRIGGERED'
           IF (checkpoint) WRITE(*,*)'CHECKPOINT HIT'
-          WRITE(*,*) Mptmass(t)
+c          WRITE(*,*) Mptmass(t)
           CALL get_time
           aver_iter1 = FLOAT(Niter1)/100000.0
           aver_iter2 = FLOAT(Niter2)/100000.0
@@ -1015,9 +1015,9 @@ c-----------------------------------------------------------------------
       REAL*8  Xvec(Ngrid-1),Yvec(Ngrid-1)
           
       REAL*8  Mbaryon
-      REAL*8  Mptmass
+      REAL*8  Mptmass, Mpert_shell, Mpert_sphere
 
-      EXTERNAL Mptmass
+      EXTERNAL Mptmass, Mpert_shell, Mpert_sphere
 
 c---
      
@@ -1041,8 +1041,13 @@ c---determine elements of tridiagonal matrix
         
         q1 = r(i+1) / dr
         q2 = q1 - 1.0d0
-
-        MM = M(i) + Mbaryon(r(i)) + Mptmass(t)
+        IF (pert_model.EQ.1) THEN
+          MM = M(i) + Mbaryon(r(i)) + Mptmass(t)
+        ELSE IF (pert_model.EQ.2) THEN
+          MM = M(i) + Mbaryon(r(i)) + Mpert_sphere(t, r(i))
+        ELSE IF (pert_model.EQ.3) THEN
+          MM = M(i) + Mbaryon(r(i)) + Mpert_shell(t, r(i))
+        END IF
         dd = -((4.0d0/MM) * (r(i)**2/dr) * (dP/drho))
         
         c1 = 5.0d0 * dd * (P(i+1)/dP) - 3.0d0 * (rho(i+1)/drho)
@@ -2272,6 +2277,11 @@ c---parameters for infalling perturber
       WRITE(*,*)' infalling perturber? '
       READ(*,*)infall_pert
       WRITE(*,*)'  infall_pert = ',infall_pert
+      WRITE(*,*)' '
+
+      WRITE(*,*)' specify perturber model '
+      READ(*,*)pert_model
+      WRITE(*,*)'  pert_model = ',pert_model
       WRITE(*,*)' '
 
       WRITE(*,*)' specify heating function '
